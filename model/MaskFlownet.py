@@ -272,6 +272,7 @@ class MaskFlownet_S(nn.Module):
         x = torch.cat((self.conv6_2(x), x),1)
         x = torch.cat((self.conv6_3(x), x),1)
         x = torch.cat((self.conv6_4(x), x),1)
+        flow_feature = x
         flow6 = self.pred_flow6(x)
         mask6 = self.pred_mask6(x)
 
@@ -284,7 +285,7 @@ class MaskFlownet_S(nn.Module):
         warp5 = warp5.view(S1, S2*S3, S4, S5)
         warp5 = self.deform5(c25, warp5)
         tradeoff5 = feat5
-        warp5 = (warp5 * F.sigmoid(mask5)) + self.conv5f(tradeoff5)
+        warp5 = (warp5 * torch.sigmoid(mask5)) + self.conv5f(tradeoff5)
         warp5 = self.leakyRELU(warp5)
         corr5 = self.corr(c15, warp5)
         corr5 = self.leakyRELU(corr5)
@@ -306,7 +307,7 @@ class MaskFlownet_S(nn.Module):
         warp4 = warp4.view(S1, S2*S3, S4, S5)
         warp4 = self.deform4(c24, warp4)
         tradeoff4 = feat4
-        warp4 = (warp4 * F.sigmoid(mask4)) + self.conv4f(tradeoff4)
+        warp4 = (warp4 * torch.sigmoid(mask4)) + self.conv4f(tradeoff4)
         warp4 = self.leakyRELU(warp4)
         corr4 = self.corr(c14, warp4)
         corr4 = self.leakyRELU(corr4)
@@ -328,7 +329,7 @@ class MaskFlownet_S(nn.Module):
         warp3 = warp3.view(S1, S2*S3, S4, S5)
         warp3 = self.deform3(c23, warp3)
         tradeoff3 = feat3
-        warp3 = (warp3 * F.sigmoid(mask3)) + self.conv3f(tradeoff3)
+        warp3 = (warp3 * torch.sigmoid(mask3)) + self.conv3f(tradeoff3)
         warp3 = self.leakyRELU(warp3)
         corr3 = self.corr(c13, warp3)
         corr3 = self.leakyRELU(corr3)
@@ -350,7 +351,7 @@ class MaskFlownet_S(nn.Module):
         warp2 = warp2.view(S1, S2*S3, S4, S5)
         warp2 = self.deform2(c22, warp2)
         tradeoff2 = feat2
-        warp2 = (warp2 * F.sigmoid(mask2)) + self.conv2f(tradeoff2)
+        warp2 = (warp2 * torch.sigmoid(mask2)) + self.conv2f(tradeoff2)
         warp2 = self.leakyRELU(warp2)
         corr2 = self.corr(c12, warp2)
         corr2 = self.leakyRELU(corr2)
@@ -367,18 +368,18 @@ class MaskFlownet_S(nn.Module):
 
         predictions = [flow * self.scale for flow in [flow6, flow5, flow4, flow3, flow2]]
         occlusion_masks = []
-        occlusion_masks.append(F.sigmoid(mask2))
+        occlusion_masks.append(torch.sigmoid(mask2))
         c1s = [c11, c12, c13, c14, c15, c16]
         c2s = [c21, c12, c13, c24, c25, c26]
         flows = [flow6, flow5, flow4, flow3, flow2]
         mask0 = Upsample(mask2, 4)
-        mask0 = F.sigmoid(mask0) - 0.5
+        mask0 = torch.sigmoid(mask0) - 0.5
         c30 = im1
         c40 = self.warp(im2, Upsample(flow2, 4)*self.scale)
         c30 = torch.cat((c30, torch.zeros_like(mask0)), 1)
         c40 = torch.cat((c40, mask0), 1)
         srcs = [c1s, c2s, flows, c30, c40]
-        return predictions, occlusion_masks, srcs
+        return predictions, occlusion_masks, srcs, flow_feature
 
 
 class MaskFlownet(nn.Module):
@@ -534,7 +535,7 @@ class MaskFlownet(nn.Module):
         # im1 = x[:,:3,:,:]
         # im2 = x[:,3:,:,:]
 
-        _, _, srcs = self.MaskFlownet_S(im1, im2)
+        _, _, srcs, flow_feature = self.MaskFlownet_S(im1, im2)
         c1s, c2s, flows, c30, c40 = srcs
         c11, c12, c13, c14, c15, c16 = c1s
         c21, c22, c23, c24, c25, c26 = c2s
@@ -654,7 +655,7 @@ class MaskFlownet(nn.Module):
         preds = [flow * self.scale for flow in [flow6, flow5, flow4, flow3, flow2]]
         visuals = []
         visuals.append(flow2[:,:1])
-        return preds, visuals, []
+        return preds, visuals, [], flow_feature
 
 
 class EpeLoss(nn.Module):
